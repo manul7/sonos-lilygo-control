@@ -6,5 +6,6 @@
 
 int sonosGetVolume();
 bool sonosSetVolume(int volume);
+bool sonosTogglePlayPause();
 
 #endif // SONOS_H

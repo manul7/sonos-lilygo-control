@@ -25,11 +25,22 @@ struct ButtonEvent {
 TFT_eSPI tft = TFT_eSPI();
 Button button_a{};
 Button button_b{};
+Button encoder_sw{};
 
 int current_volume = 0;
 bool single_button_mode = false;
 uint32_t last_repeat_a_ms = 0;
 uint32_t last_repeat_b_ms = 0;
+
+// Encoder state
+volatile int encoder_pos = 0;
+int last_encoder_pos = 0;
+volatile int last_clk_state = HIGH;
+
+// Volume batching
+uint32_t last_encoder_change_ms = 0;
+int pending_volume_delta = 0;
+static const uint32_t VOLUME_BATCH_MS = 50;  // batch rapid turns
 
 int majorityRead(int pin) {
   int highs = 0;
@@ -137,6 +148,40 @@ void changeVolume(int delta) {
   }
 }
 
+void showStatus(const char* msg) {
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextDatum(MC_DATUM);
+  tft.drawString(msg, tft.width() / 2, tft.height() / 2, 4);
+}
+
+bool checkWiFi() {
+  if (WiFi.status() == WL_CONNECTED) return true;
+
+  showStatus("WiFi...");
+  WiFi.reconnect();
+
+  uint32_t start = millis();
+  while (WiFi.status() != WL_CONNECTED && (millis() - start) < 10000) {
+    delay(250);
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    drawVolume();
+    return true;
+  }
+  return false;
+}
+
+void IRAM_ATTR encoderISR() {
+  const int clk = digitalRead(ENCODER_CLK_PIN);
+  const int dt = digitalRead(ENCODER_DT_PIN);
+  if (clk != last_clk_state && clk == LOW) {
+    encoder_pos += (dt != clk) ? 1 : -1;
+  }
+  last_clk_state = clk;
+}
+
 }  // namespace
 
 void setup() {
@@ -149,10 +194,18 @@ void setup() {
   // GPIO35 is input-only; GPIO0 usually has external pull-up.
   pinMode(BUTTON_A_PIN, INPUT);
   pinMode(BUTTON_B_PIN, INPUT_PULLUP);
+
+  // Rotary encoder
+  pinMode(ENCODER_CLK_PIN, INPUT_PULLUP);
+  pinMode(ENCODER_DT_PIN, INPUT_PULLUP);
+  pinMode(ENCODER_SW_PIN, INPUT_PULLUP);
+  last_clk_state = digitalRead(ENCODER_CLK_PIN);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_CLK_PIN), encoderISR, CHANGE);
   delay(20);
 
   button_a = makeButton(BUTTON_A_PIN, true);
   button_b = makeButton(BUTTON_B_PIN, true);
+  encoder_sw = makeButton(ENCODER_SW_PIN, true);
 
   // Some board variants expose only one usable GPIO button.
   single_button_mode = (button_a.enabled && !button_b.enabled);
@@ -191,16 +244,44 @@ void setup() {
 void loop() {
   const uint32_t now = millis();
 
+  // Handle rotary encoder rotation with batching
+  noInterrupts();
+  const int pos = encoder_pos;
+  interrupts();
+
+  if (pos != last_encoder_pos) {
+    pending_volume_delta += (pos - last_encoder_pos) * VOLUME_STEP;
+    last_encoder_pos = pos;
+    last_encoder_change_ms = now;
+  }
+
+  // Apply batched volume change after settling
+  if (pending_volume_delta != 0 && (now - last_encoder_change_ms) >= VOLUME_BATCH_MS) {
+    if (checkWiFi()) {
+      changeVolume(pending_volume_delta);
+    }
+    pending_volume_delta = 0;
+  }
+
+  // Handle encoder SW button for play/pause
+  const ButtonEvent sw_event = updateButton(encoder_sw, now);
+  if (sw_event.type == ButtonEventType::Press) {
+    if (checkWiFi()) {
+      showStatus(sonosTogglePlayPause() ? "OK" : "ERR");
+      delay(300);
+      drawVolume();
+    }
+  }
+
+  // Keep built-in buttons as fallback
   const ButtonEvent a_event = updateButton(button_a, now);
   const ButtonEvent b_event = updateButton(button_b, now);
 
   if (single_button_mode) {
-    // Fallback mode: short press +, long press -.
     if (a_event.type == ButtonEventType::Release) {
       changeVolume((a_event.held_ms >= LONG_PRESS_MS) ? -VOLUME_STEP : +VOLUME_STEP);
     }
   } else {
-    // Initial press
     if (a_event.type == ButtonEventType::Press) {
       changeVolume(+VOLUME_STEP);
       last_repeat_a_ms = now;
@@ -209,7 +290,6 @@ void loop() {
       changeVolume(-VOLUME_STEP);
       last_repeat_b_ms = now;
     }
-    // Auto-repeat while held
     if (button_a.stable_pressed && (now - last_repeat_a_ms) >= REPEAT_INTERVAL_MS) {
       changeVolume(+VOLUME_STEP);
       last_repeat_a_ms = now;

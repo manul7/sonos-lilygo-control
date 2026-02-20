@@ -2,15 +2,22 @@
 
 namespace {
 
-String sonosUrl() {
+String sonosRenderingUrl() {
   return String("http://") + SONOS_IP + ":" + SONOS_PORT + "/MediaRenderer/RenderingControl/Control";
+}
+
+String sonosTransportUrl() {
+  return String("http://") + SONOS_IP + ":" + SONOS_PORT + "/MediaRenderer/AVTransport/Control";
 }
 
 }  // namespace
 
+static const int HTTP_TIMEOUT_MS = 2000;
+
 int sonosGetVolume() {
   HTTPClient http;
-  http.begin(sonosUrl());
+  http.begin(sonosRenderingUrl());
+  http.setTimeout(HTTP_TIMEOUT_MS);
   http.addHeader("Content-Type", "text/xml; charset=\"utf-8\"");
   http.addHeader("SOAPACTION", "\"urn:schemas-upnp-org:service:RenderingControl:1#GetVolume\"");
 
@@ -46,7 +53,8 @@ bool sonosSetVolume(int volume) {
   if (volume > 100) volume = 100;
 
   HTTPClient http;
-  http.begin(sonosUrl());
+  http.begin(sonosRenderingUrl());
+  http.setTimeout(HTTP_TIMEOUT_MS);
   http.addHeader("Content-Type", "text/xml; charset=\"utf-8\"");
   http.addHeader("SOAPACTION", "\"urn:schemas-upnp-org:service:RenderingControl:1#SetVolume\"");
 
@@ -64,6 +72,70 @@ bool sonosSetVolume(int volume) {
     "</s:Envelope>");
 
   int httpCode = http.POST(body);
+  http.end();
+  return httpCode == 200;
+}
+
+bool sonosTogglePlayPause() {
+  HTTPClient http;
+  http.begin(sonosTransportUrl());
+  http.setTimeout(HTTP_TIMEOUT_MS);
+  http.addHeader("Content-Type", "text/xml; charset=\"utf-8\"");
+  http.addHeader("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#GetTransportInfo\"");
+
+  const char* getStateBody =
+    "<?xml version=\"1.0\"?>"
+    "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" "
+    "s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">"
+    "<s:Body>"
+    "<u:GetTransportInfo xmlns:u=\"urn:schemas-upnp-org:service:AVTransport:1\">"
+    "<InstanceID>0</InstanceID>"
+    "</u:GetTransportInfo>"
+    "</s:Body>"
+    "</s:Envelope>";
+
+  int httpCode = http.POST(getStateBody);
+  bool isPlaying = false;
+
+  if (httpCode == 200) {
+    String response = http.getString();
+    isPlaying = response.indexOf("PLAYING") > 0;
+  }
+  http.end();
+
+  http.begin(sonosTransportUrl());
+  http.setTimeout(HTTP_TIMEOUT_MS);
+  http.addHeader("Content-Type", "text/xml; charset=\"utf-8\"");
+
+  if (isPlaying) {
+    http.addHeader("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#Pause\"");
+    const char* pauseBody =
+      "<?xml version=\"1.0\"?>"
+      "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" "
+      "s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">"
+      "<s:Body>"
+      "<u:Pause xmlns:u=\"urn:schemas-upnp-org:service:AVTransport:1\">"
+      "<InstanceID>0</InstanceID>"
+      "</u:Pause>"
+      "</s:Body>"
+      "</s:Envelope>";
+    httpCode = http.POST(pauseBody);
+  } else {
+    http.addHeader("SOAPACTION", "\"urn:schemas-upnp-org:service:AVTransport:1#Play\"");
+    const char* playBody =
+      "<?xml version=\"1.0\"?>"
+      "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" "
+      "s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">"
+      "<s:Body>"
+      "<u:Play xmlns:u=\"urn:schemas-upnp-org:service:AVTransport:1\">"
+      "<InstanceID>0</InstanceID>"
+      "<Speed>1</Speed>"
+      "</u:Play>"
+      "</s:Body>"
+      "</s:Envelope>";
+    httpCode = http.POST(playBody);
+  }
+
   http.end();
   return httpCode == 200;
 }
