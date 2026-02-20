@@ -1,5 +1,7 @@
 # TTGO Sonos Volume Controller
 
+<img src="docs/render_v0.jpg" alt="Hull" width="600">
+
 ESP32-based hardware volume knob for Sonos speakers using a TTGO T-Display board.
 
 ## Features
