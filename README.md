@@ -5,24 +5,16 @@ ESP32-based hardware volume knob for Sonos speakers using a TTGO T-Display board
 ## Features
 
 - Large volume display on TFT screen
-- Two-button control: up/down volume
-- Auto-repeat when button held
-- Single-button fallback: short press +, long press -
+- Rotary encoder for smooth volume adjustment
+- Encoder button toggles play/pause
+- Built-in buttons as fallback (up/down with auto-repeat)
 - WiFi connectivity to Sonos via UPnP/SOAP
-
-### Planned
-
-- **Rotary encoder**: rotation adjusts volume, push toggles mute/unmute
-- **Button**: play/stop toggle
 
 ## Hardware
 
 - **Board**: TTGO T-Display (ESP32 with 1.14" TFT, 240x135)
-- **Buttons**: GPIO35 (A), GPIO0 (B)
-
-### Planned
-
-- **Rotary encoder**: with push button (CLK, DT, SW pins)
+- **Rotary encoder**: CLK → GPIO25, DT → GPIO26, SW → GPIO27
+- **Built-in buttons**: GPIO35 (A), GPIO0 (B)
 
 ## Project Structure
 
@@ -59,32 +51,39 @@ Copy `config.h.example` to `config.h` and edit:
 
 ```cpp
 // WiFi
-const char* WIFI_SSID = "YourNetwork";
-const char* WIFI_PASSWORD = "YourPassword";
+static const char* WIFI_SSID = "YourNetwork";
+static const char* WIFI_PASSWORD = "YourPassword";
 
 // Sonos
-const char* SONOS_IP = "192.168.x.x";  // Your Sonos speaker IP
-constexpr int SONOS_PORT = 1400;
-constexpr int VOLUME_STEP = 2;
+static const char* SONOS_IP = "192.168.x.x";  // Your Sonos speaker IP
+static const int SONOS_PORT = 1400;
+static const int VOLUME_STEP = 1;
 
-// Hardware & Display
-constexpr int BUTTON_A_PIN = 35;
-constexpr int BUTTON_B_PIN = 0;
-constexpr uint8_t DISPLAY_ROTATION = 1;
-constexpr bool DISPLAY_INVERT = true;
+// Hardware
+static const int BUTTON_A_PIN = 35;
+static const int BUTTON_B_PIN = 0;
+static const int ENCODER_CLK_PIN = 25;
+static const int ENCODER_DT_PIN = 26;
+static const int ENCODER_SW_PIN = 27;
+
+// Display
+static const uint8_t DISPLAY_ROTATION = 1;
+static const bool DISPLAY_INVERT = true;
 
 // Timing
-constexpr uint32_t DEBOUNCE_MS = 35;
-constexpr uint32_t LONG_PRESS_MS = 700;
-constexpr uint32_t REPEAT_INTERVAL_MS = 300;
+static const uint32_t DEBOUNCE_MS = 35;
+static const uint32_t LONG_PRESS_MS = 700;
+static const uint32_t REPEAT_INTERVAL_MS = 300;
 ```
 
 Note: `config.h` contains credentials and is excluded from version control.
 
 ## Usage
 
-- **Button A (GPIO35)**: Volume up
-- **Button B (GPIO0)**: Volume down
-- Hold either button for auto-repeat
+- **Encoder rotation**: Volume up/down
+- **Encoder button**: Play/pause toggle
+- **Button A (GPIO35)**: Volume up (fallback)
+- **Button B (GPIO0)**: Volume down (fallback)
+- Hold built-in buttons for auto-repeat
 
-Single-button mode activates automatically if only one button is detected.
+Single-button mode activates automatically if only one built-in button is detected.
