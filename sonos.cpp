@@ -42,7 +42,11 @@ int sonosGetVolume() {
     int end = response.indexOf("</CurrentVolume>");
     if (start > 0 && end > start) {
       volume = response.substring(start + 15, end).toInt();
+    } else {
+      Serial.println("GetVolume: missing <CurrentVolume> in response");
     }
+  } else {
+    Serial.printf("GetVolume failed: HTTP %d\n", httpCode);
   }
   http.end();
   return volume;
@@ -72,6 +76,9 @@ bool sonosSetVolume(int volume) {
     "</s:Envelope>");
 
   int httpCode = http.POST(body);
+  if (httpCode != 200) {
+    Serial.printf("SetVolume(%d) failed: HTTP %d\n", volume, httpCode);
+  }
   http.end();
   return httpCode == 200;
 }
@@ -100,6 +107,8 @@ bool sonosTogglePlayPause() {
   if (httpCode == 200) {
     String response = http.getString();
     isPlaying = response.indexOf("PLAYING") > 0;
+  } else {
+    Serial.printf("GetTransportInfo failed: HTTP %d\n", httpCode);
   }
   http.end();
 
@@ -136,6 +145,9 @@ bool sonosTogglePlayPause() {
     httpCode = http.POST(playBody);
   }
 
+  if (httpCode != 200) {
+    Serial.printf("%s failed: HTTP %d\n", isPlaying ? "Pause" : "Play", httpCode);
+  }
   http.end();
   return httpCode == 200;
 }
