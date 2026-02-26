@@ -23,6 +23,21 @@ static const int ENCODER_SW_PIN = 27;   // Button
 static const uint8_t DISPLAY_ROTATION = 1;       // Landscape: 240x135, USB on left
 static const bool DISPLAY_INVERT = true;         // Set false if colors invert
 
+// UI Colors (RGB565)
+static const uint16_t COLOR_TRI_FILL  = 0x07E0;  // bright green
+static const uint16_t COLOR_ICON_ON   = 0xFFFF;  // white
+static const uint16_t COLOR_ICON_OFF  = 0x4208;  // dark gray
+
+// Triangle geometry
+static const int TRI_HEIGHT   = 100;
+static const int TRI_BASE     = 116;  // ~equilateral for H=100
+static const int TRI_OFFSET_Y = 5;    // push down from vertical center
+
+// Status icon layout (top-right)
+static const int ICON_SIZE   = 10;
+static const int ICON_GAP    = 4;
+static const int ICON_MARGIN = 6;
+
 // Timing Configuration
 static const uint32_t DEBOUNCE_MS = 35;
 static const uint32_t LONG_PRESS_MS = 700;
