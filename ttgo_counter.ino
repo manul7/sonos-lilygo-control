@@ -120,20 +120,78 @@ int pickFontToFit(const char *text, int max_width, int start_font, int min_font)
   return min_font;
 }
 
-void drawVolume() {
+void drawScreen() {
+  tft.fillScreen(TFT_BLACK);
+
+  const int w = tft.width();   // 240
+  const int h = tft.height();  // 135
+
+  // Inverted triangle — flat edge at top, apex at bottom
+  const int cx = w / 2;
+  const int tri_cy = h / 2 + TRI_OFFSET_Y;
+  const int top_y = tri_cy - TRI_HEIGHT / 2;
+  const int bot_y = tri_cy + TRI_HEIGHT / 2;
+  const int half_base = TRI_BASE / 2;
+
+  // Fill from apex (bottom) upward proportional to volume.
+  // The filled region is a smaller triangle sharing the apex.
+  if (current_volume > 0) {
+    const float frac = current_volume / 100.0f;
+    // fill_y = line where fill stops (moves up from bot_y toward top_y)
+    const int fill_y = bot_y - (int)(frac * TRI_HEIGHT);
+    // Width at fill_y: triangle widens toward the top
+    const int fill_half_w = (int)(half_base * frac);
+
+    tft.fillTriangle(cx, bot_y,
+                     cx - fill_half_w, fill_y,
+                     cx + fill_half_w, fill_y,
+                     COLOR_TRI_FILL);
+  }
+
+  // Volume number centered in upper portion of triangle
   char vol_text[8];
   snprintf(vol_text, sizeof(vol_text), "%d", current_volume);
-
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(TFT_WHITE);
+  const int text_y = top_y + TRI_HEIGHT / 3;
+  const int font = pickFontToFit(vol_text, half_base, 4, 2);
+  tft.drawString(vol_text, cx, text_y, font);
 
-  const int cx = tft.width() / 2;
-  const int cy = tft.height() / 2;
-  const int max_w = tft.width() - 12;
+  // Status icons — top-right corner
+  const bool wifi_ok = (WiFi.status() == WL_CONNECTED);
+  const bool sonos_ok = sonosIsConnected();
+  const bool playing = sonosIsPlaying();
 
-  const int font = pickFontToFit(vol_text, max_w, 8, 4);
-  tft.drawString(vol_text, cx, cy, font);
+  // Rightmost icon x position
+  int ix = w - ICON_MARGIN - ICON_SIZE;
+  const int iy = ICON_MARGIN;
+
+  // Sonos indicator: "S" letter
+  tft.setTextDatum(TL_DATUM);
+  tft.setTextColor(sonos_ok ? COLOR_ICON_ON : COLOR_ICON_OFF);
+  tft.drawString("S", ix, iy, 1);
+
+  ix -= (ICON_SIZE + ICON_GAP);
+
+  // WiFi indicator: filled circle
+  tft.fillCircle(ix + ICON_SIZE / 2, iy + ICON_SIZE / 2, ICON_SIZE / 2 - 1,
+                 wifi_ok ? COLOR_ICON_ON : COLOR_ICON_OFF);
+
+  ix -= (ICON_SIZE + ICON_GAP);
+
+  // Play/pause indicator
+  if (playing) {
+    // Triangle (play icon)
+    tft.fillTriangle(ix, iy, ix, iy + ICON_SIZE,
+                     ix + ICON_SIZE, iy + ICON_SIZE / 2,
+                     COLOR_ICON_ON);
+  } else {
+    // Two bars (pause icon)
+    const int bar_w = 3;
+    const int gap = 2;
+    tft.fillRect(ix, iy, bar_w, ICON_SIZE, COLOR_ICON_ON);
+    tft.fillRect(ix + bar_w + gap, iy, bar_w, ICON_SIZE, COLOR_ICON_ON);
+  }
 }
 
 void changeVolume(int delta) {
@@ -144,7 +202,7 @@ void changeVolume(int delta) {
 
   if (sonosSetVolume(new_volume)) {
     current_volume = new_volume;
-    drawVolume();
+    drawScreen();
   }
 }
 
@@ -167,7 +225,7 @@ bool checkWiFi() {
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    drawVolume();
+    drawScreen();
     return true;
   }
   return false;
@@ -238,7 +296,7 @@ void setup() {
   current_volume = sonosGetVolume();
   if (current_volume < 0) current_volume = 0;
 
-  drawVolume();
+  drawScreen();
 }
 
 void loop() {
@@ -267,9 +325,8 @@ void loop() {
   const ButtonEvent sw_event = updateButton(encoder_sw, now);
   if (sw_event.type == ButtonEventType::Press) {
     if (checkWiFi()) {
-      showStatus(sonosTogglePlayPause() ? "OK" : "ERR");
-      delay(300);
-      drawVolume();
+      sonosTogglePlayPause();
+      drawScreen();
     }
   }
 

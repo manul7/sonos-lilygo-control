@@ -2,6 +2,9 @@
 
 namespace {
 
+bool s_connected = false;
+bool s_playing = false;
+
 String sonosRenderingUrl() {
   return String("http://") + SONOS_IP + ":" + SONOS_PORT + "/MediaRenderer/RenderingControl/Control";
 }
@@ -13,6 +16,9 @@ String sonosTransportUrl() {
 }  // namespace
 
 static const int HTTP_TIMEOUT_MS = 2000;
+
+bool sonosIsConnected() { return s_connected; }
+bool sonosIsPlaying()   { return s_playing; }
 
 int sonosGetVolume() {
   HTTPClient http;
@@ -35,6 +41,7 @@ int sonosGetVolume() {
 
   int httpCode = http.POST(body);
   int volume = -1;
+  s_connected = (httpCode == 200);
 
   if (httpCode == 200) {
     String response = http.getString();
@@ -76,6 +83,7 @@ bool sonosSetVolume(int volume) {
     "</s:Envelope>");
 
   int httpCode = http.POST(body);
+  s_connected = (httpCode == 200);
   if (httpCode != 200) {
     Serial.printf("SetVolume(%d) failed: HTTP %d\n", volume, httpCode);
   }
@@ -103,6 +111,7 @@ bool sonosTogglePlayPause() {
 
   int httpCode = http.POST(getStateBody);
   bool isPlaying = false;
+  s_connected = (httpCode == 200);
 
   if (httpCode == 200) {
     String response = http.getString();
@@ -145,6 +154,10 @@ bool sonosTogglePlayPause() {
     httpCode = http.POST(playBody);
   }
 
+  s_connected = (httpCode == 200);
+  if (httpCode == 200) {
+    s_playing = !isPlaying;  // toggled: was playing → now paused, vice versa
+  }
   if (httpCode != 200) {
     Serial.printf("%s failed: HTTP %d\n", isPlaying ? "Pause" : "Play", httpCode);
   }
